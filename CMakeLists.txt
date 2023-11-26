@@ -17,13 +17,13 @@ set(PROJECT_NAME "PlugInExample")
 # allowing you to change parameters and behavior without breaking existing user projects
 set(PRODUCT_NAME "WoodtlisExample")
 
-# Change me! Used for the MacOS bundle name and Installers
+# Used for the MacOS bundle name and Installers
 set(COMPANY_NAME "woodtli.engineering")
 
-# Change me! Used for the MacOS bundle identifier (and signing)
+# Used for the MacOS bundle identifier (and signing)
 set(BUNDLE_ID "woodtli.engineering.example")
 
-# Change me! Set the plugin formats you want built
+# Set the plugin formats you want built
 # Valid choices: AAX Unity VST VST3 AU AUv3 Standalone
 set(FORMATS Standalone AU VST3 AUv3)
 
@@ -143,7 +143,7 @@ target_link_libraries(SharedCode
 target_link_libraries("${PROJECT_NAME}" PRIVATE SharedCode)
 
 # IPP support, comment out to disable
-include(PamplejuceIPP)
+#include(PamplejuceIPP)
 
 # Everything related to the tests target
 include(Tests)
