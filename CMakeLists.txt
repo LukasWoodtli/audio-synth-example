@@ -36,11 +36,14 @@ include(PamplejuceMacOS)
 # Couple tweaks that IMO should be JUCE defaults
 include(JUCEDefaults)
 
+set(JUCE_BUILD_EXTRAS cache ON)
+
 # JUCE is setup as a submodule in the /JUCE folder
 # Locally, you must run `git submodule update --init --recursive` once
 # and later `git submodule update --remote --merge` to keep it up to date
 # On Github Actions, this is done as a part of actions/checkout
 add_subdirectory(JUCE)
+add_dependencies(AudioPluginHost PlugInExample_All)
 
 # Add any other modules you want modules here, before the juce_add_plugin call
 # juce_add_module(modules/my_module)
@@ -51,6 +54,8 @@ add_subdirectory (modules/melatonin_inspector)
 # See `docs/CMake API.md` in the JUCE repo for all config options
 juce_add_plugin("${PROJECT_NAME}"
     IS_SYNTH TRUE
+    NEEDS_MIDI_INPUT TRUE
+    #NEEDS_MIDI_OUTPUT TRUE
 
     # Icons for the standalone app
     ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/packaging/icon.png"
@@ -58,7 +63,7 @@ juce_add_plugin("${PROJECT_NAME}"
     COMPANY_NAME "${COMPANY_NAME}"
     BUNDLE_ID "${BUNDLE_ID}"
 
-    # On MacOS, plugin is copied to ~/Users/yourname/Library/Audio/Plug-Ins/
+    # On MacOS, plugin is copied to ~/Library/Audio/Plug-Ins/
     COPY_PLUGIN_AFTER_BUILD TRUE
 
     # A four-character plugin id
