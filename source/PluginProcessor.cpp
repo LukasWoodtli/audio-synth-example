@@ -1,5 +1,8 @@
+#include <memory>
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "SynthVoice.h"
+#include "SynthSound.h"
 
 //==============================================================================
 PluginProcessor::PluginProcessor()
@@ -10,12 +13,16 @@ PluginProcessor::PluginProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ),
+      apvts(*this, nullptr, "Parameters", createParams())
 {
+    synth.addSound(new SynthSound());
+    synth.addVoice(new SynthVoice());
 }
 
 PluginProcessor::~PluginProcessor()
 {
+
 }
 
 //==============================================================================
@@ -86,9 +93,16 @@ void PluginProcessor::changeProgramName (int index, const juce::String& newName)
 //==============================================================================
 void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    synth.setCurrentPlaybackSampleRate(sampleRate);
+
+    for (auto i = 0; i < synth.getNumVoices(); ++i) {
+        if (auto voice = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+        {
+            voice->prepareToPlay(sampleRate, samplesPerBlock, getTotalNumOutputChannels());
+        }
+    }
+
+    filter.prepareToPlay(sampleRate, samplesPerBlock, getTotalNumOutputChannels());
 }
 
 void PluginProcessor::releaseResources()
@@ -128,27 +142,45 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    for (auto i = 0; i < synth.getNumVoices(); ++i)
     {
-        auto* channelData = buffer.getWritePointer (channel);
-        juce::ignoreUnused (channelData);
-        // ..do something to the data...
+        if (auto voice = dynamic_cast<SynthVoice*>(synth.getVoice(i))){
+            // ADSR
+            const auto& attack = *apvts.getRawParameterValue("ATTACK");
+            const auto& decay = *apvts.getRawParameterValue("DECAY");
+            const auto& sustain = *apvts.getRawParameterValue("SUSTAIN");
+            const auto& release = *apvts.getRawParameterValue("RELEASE");
+            voice->updateADSR(attack.load(), decay.load(), sustain.load(), release.load());
+
+            // OSC control
+            auto& oscWaveChoice = *apvts.getRawParameterValue("OSC1WAVETYPE");
+            voice->getOscillator().setWaveType((const int)oscWaveChoice);
+
+            const auto& fmDepth = *apvts.getRawParameterValue("OSC1FMDEPTH");
+            const auto& fmFreq = *apvts.getRawParameterValue("OSC1FMFREQ");
+            voice->getOscillator().setFmParams(fmDepth, fmFreq);
+
+            // LFO
+        }
     }
+
+/*    for (const juce::MidiMessageMetadata metadata : midiMessages)
+        if (metadata.numBytes == 3)
+            juce::Logger::writeToLog ("MIDI: " + juce::String(metadata.getMessage().getTimeStamp())
+                + " - " + metadata.getMessage().getDescription());
+*/
+    synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
+
+    // Filter
+    const auto& filterType = *apvts.getRawParameterValue("FILTERTYPE");
+    const auto& filterCutoff = *apvts.getRawParameterValue("FILTERCUTOFF");
+    const auto& filterResonance = *apvts.getRawParameterValue("FILTERRES");
+    filter.updateParameters((int)filterType.load(), filterCutoff.load(), filterResonance.load());
+
+    filter.process(buffer);
 }
 
 //==============================================================================
@@ -183,4 +215,32 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new PluginProcessor();
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParams()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    // Osc Combobox: switch oscillator shape
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"OSC1WAVETYPE", 1}, "Oscillator 1 Wave Type",
+        juce::StringArray { "Sine", "Saw", "Square"}, 0));
+
+    // FM
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"OSC1FMFREQ", 1}, "FM Oscillator 1 Frequency", juce::NormalisableRange<float> {0.0f, 1000.0f, 0.01f, 0.3f}, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"OSC1FMDEPTH", 1}, "FM Oscillator 1 Depth", juce::NormalisableRange<float> {0.0f, 1000.0f, 0.01f, 0.3f}, 0.0f));
+
+    // ADSR
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"ATTACK", 1}, "Attack", juce::NormalisableRange<float> {0.1f, 1.0f}, 0.1f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"DECAY", 1}, "Decay", juce::NormalisableRange<float> {0.1f, 1.0f}, 0.1f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"SUSTAIN", 1}, "Sustain", juce::NormalisableRange<float> {0.1f, 1.0f}, 1.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"RELEASE", 1}, "Release", juce::NormalisableRange<float> {0.1f, 3.0f}, 0.4f));
+
+    // Filter
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{"FILTERTYPE", 1}, "Filter Type",
+        juce::StringArray { "Low-Pass", "Band-Pass", "High-Pass"}, 0));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"FILTERCUTOFF", 1}, "Filter Cutoff", juce::NormalisableRange<float> {20.0f, 20000.0f, 0.1f, 0.6f}, 200.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"FILTERRES", 1}, "Filter Resonance", juce::NormalisableRange<float> {1.0f, 10.0f, 0.1f }, 1.0f));
+
+
+    return { params.begin(), params.end() };
 }

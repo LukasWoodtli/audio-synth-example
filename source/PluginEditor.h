@@ -1,7 +1,10 @@
 #pragma once
 
-#include "PluginProcessor.h"
 #include "BinaryData.h"
+#include "PluginProcessor.h"
+#include "UI/AdsrComponent.h"
+#include "UI/FilterComponent.h"
+#include "UI/OscComponent.h"
 #include "melatonin_inspector/melatonin_inspector.h"
 
 //==============================================================================
@@ -16,10 +19,16 @@ public:
     void resized() override;
 
 private:
-    // This reference is provided as a quick way for your editor to
-    // access the processor object that created it.
+
+private:
     PluginProcessor& processorRef;
+
     std::unique_ptr<melatonin::Inspector> inspector;
     juce::TextButton inspectButton { "Inspect the UI" };
+
+    OscComponent osc;
+    AdsrComponent adsr;
+    FilterComponent filter;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };

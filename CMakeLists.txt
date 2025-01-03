@@ -81,9 +81,6 @@ juce_add_plugin("${PROJECT_NAME}"
     # You might want to use v${MAJOR_VERSION} here once you go to v2...
     PRODUCT_NAME "${PRODUCT_NAME}")
 
-# For a GPL project the splash screen saying "Made with JUCE can be disabled"
-add_compile_definitions(-DJUCE_DISPLAY_SPLASH_SCREEN=0)
-
 # This lets us use our code in both the JUCE targets and our Test target
 # Without running into ODR violations
 add_library(SharedCode INTERFACE)
@@ -92,12 +89,27 @@ add_library(SharedCode INTERFACE)
 # Use cxx_std_23 for C++23 (as of CMake v 3.20)
 target_compile_features(SharedCode INTERFACE cxx_std_20)
 
-# Manually list all .h and .cpp files for the plugin
-# If you are like me, you'll use globs for your sanity.
-# Just ensure you employ CONFIGURE_DEPENDS so the build system picks up changes
-# If you want to appease the CMake gods and avoid globs, manually add files like so:
-# set(SourceFiles Source/PluginEditor.h Source/PluginProcessor.h Source/PluginEditor.cpp Source/PluginProcessor.cpp)
-file(GLOB_RECURSE SourceFiles CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/source/*.h")
+set(SourceFiles
+        source/PluginEditor.h
+        source/PluginProcessor.h
+        source/PluginEditor.cpp
+        source/PluginProcessor.cpp
+        source/SynthVoice.h
+        source/SynthVoice.cpp
+        source/SynthSound.h
+        source/UI/AdsrComponent.cpp
+        source/UI/AdsrComponent.h
+        source/UI/OscComponent.cpp
+        source/UI/OscComponent.h
+        source/UI/FilterComponent.cpp
+        source/UI/FilterComponent.h
+        source/data/AdsrData.cpp
+        source/data/AdsrData.h
+        source/data/OscData.cpp
+        source/data/OscData.h
+        source/data/FilterData.cpp
+        source/data/FilterData.h
+)
 target_sources(SharedCode INTERFACE ${SourceFiles})
 
 # Adds a BinaryData target for embedding assets into the binary
@@ -116,7 +128,7 @@ target_compile_definitions(SharedCode
     JUCE_VST3_CAN_REPLACE_VST2=0
 
     # Uncomment if you are paying for a an Indie/Pro license or releasing under GPLv3
-    # JUCE_DISPLAY_SPLASH_SCREEN=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0
 
     # lets the app known if we're Debug or Release
     CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
@@ -125,6 +137,7 @@ target_compile_definitions(SharedCode
     # JucePlugin_Name is for some reason doesn't use the nicer PRODUCT_NAME
     PRODUCT_NAME_WITHOUT_VERSION="PlugInExample"
 )
+
 
 # Link to any other modules you added (with juce_add_module) here!
 # Usually JUCE modules must have PRIVATE visibility
@@ -141,8 +154,10 @@ target_link_libraries(SharedCode
     juce_gui_basics
     juce_gui_extra
     juce::juce_recommended_config_flags
-    #juce::juce_recommended_lto_flags
-    juce::juce_recommended_warning_flags)
+    juce::juce_recommended_warning_flags
+    -Wl,-weak_reference_mismatches,weak)
+
+target_compile_definitions(SharedCode INTERFACE JUCE_SILENCE_XCODE_15_LINKER_WARNING)
 
 # Link the JUCE plugin targets our SharedCode target
 target_link_libraries("${PROJECT_NAME}" PRIVATE SharedCode)

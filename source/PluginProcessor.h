@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "data/FilterData.h"
 
 #if (MSVC)
 #include "ipps.h"
@@ -38,6 +39,17 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    juce::AudioProcessorValueTreeState& getAudioProcessorValueTreeState() {
+        return apvts;
+    }
+
 private:
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParams();
+private:
+    juce::Synthesiser synth;
+    FilterData filter;
+    juce::AudioProcessorValueTreeState apvts;
+
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
 };
